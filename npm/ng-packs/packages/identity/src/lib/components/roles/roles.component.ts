@@ -1,8 +1,13 @@
-import { ListService } from '@abp/ng.core';
+import { ListService, PagedAndSortedResultRequestDto } from '@abp/ng.core';
 import { ePermissionManagementComponents } from '@abp/ng.permission-management';
 import { Confirmation, ConfirmationService } from '@abp/ng.theme.shared';
-import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
-import { FormBuilder, FormControl, FormGroup, Validators } from '@angular/forms';
+import {
+  EXTENSIONS_IDENTIFIER,
+  FormPropData,
+  generateFormFromProps,
+} from '@abp/ng.theme.shared/extensions';
+import { Component, ElementRef, Injector, OnInit, ViewChild } from '@angular/core';
+import { FormGroup } from '@angular/forms';
 import { Select, Store } from '@ngxs/store';
 import { Observable } from 'rxjs';
 import { finalize, pluck } from 'rxjs/operators';
@@ -13,24 +18,31 @@ import {
   GetRoles,
   UpdateRole,
 } from '../../actions/identity.actions';
-import { Identity } from '../../models/identity';
+import { eIdentityComponents } from '../../enums/components';
+import { IdentityRoleDto } from '../../proxy/identity/models';
 import { IdentityState } from '../../states/identity.state';
 
 @Component({
   selector: 'abp-roles',
   templateUrl: './roles.component.html',
-  providers: [ListService],
+  providers: [
+    ListService,
+    {
+      provide: EXTENSIONS_IDENTIFIER,
+      useValue: eIdentityComponents.Roles,
+    },
+  ],
 })
 export class RolesComponent implements OnInit {
   @Select(IdentityState.getRoles)
-  data$: Observable<Identity.RoleItem[]>;
+  data$: Observable<IdentityRoleDto[]>;
 
   @Select(IdentityState.getRolesTotalCount)
   totalCount$: Observable<number>;
 
   form: FormGroup;
 
-  selected: Identity.RoleItem;
+  selected: IdentityRoleDto;
 
   isModalVisible: boolean;
 
@@ -42,18 +54,15 @@ export class RolesComponent implements OnInit {
 
   permissionManagementKey = ePermissionManagementComponents.PermissionManagement;
 
-  @ViewChild('formRef', { static: false, read: ElementRef })
-  formRef: ElementRef<HTMLFormElement>;
-
   onVisiblePermissionChange = event => {
     this.visiblePermissions = event;
   };
 
   constructor(
-    public readonly list: ListService,
-    private confirmationService: ConfirmationService,
-    private fb: FormBuilder,
-    private store: Store,
+    public readonly list: ListService<PagedAndSortedResultRequestDto>,
+    protected confirmationService: ConfirmationService,
+    protected store: Store,
+    protected injector: Injector,
   ) {}
 
   ngOnInit() {
@@ -61,14 +70,8 @@ export class RolesComponent implements OnInit {
   }
 
   buildForm() {
-    this.form = this.fb.group({
-      name: new FormControl({ value: this.selected.name || '', disabled: this.selected.isStatic }, [
-        Validators.required,
-        Validators.maxLength(256),
-      ]),
-      isDefault: [this.selected.isDefault || false],
-      isPublic: [this.selected.isPublic || false],
-    });
+    const data = new FormPropData(this.injector, this.selected);
+    this.form = generateFormFromProps(data);
   }
 
   openModal() {
@@ -77,7 +80,7 @@ export class RolesComponent implements OnInit {
   }
 
   add() {
-    this.selected = {} as Identity.RoleItem;
+    this.selected = {} as IdentityRoleDto;
     this.openModal();
   }
 
@@ -122,12 +125,6 @@ export class RolesComponent implements OnInit {
 
   private hookToQuery() {
     this.list.hookToQuery(query => this.store.dispatch(new GetRoles(query))).subscribe();
-  }
-
-  onClickSaveButton() {
-    this.formRef.nativeElement.dispatchEvent(
-      new Event('submit', { bubbles: true, cancelable: true }),
-    );
   }
 
   openPermissionsModal(providerKey: string) {

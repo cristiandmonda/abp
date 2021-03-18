@@ -2,13 +2,12 @@ import { HttpClient } from '@angular/common/http';
 import { Component, NgModule } from '@angular/core';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { createRoutingFactory, SpectatorRouting } from '@ngneat/spectator/jest';
-import { Actions, NgxsModule, Store } from '@ngxs/store';
-import { NEVER } from 'rxjs';
 import { DynamicLayoutComponent, RouterOutletComponent } from '../components';
 import { eLayoutType } from '../enums/common';
 import { ABP } from '../models';
-import { ApplicationConfigurationService, RoutesService } from '../services';
-import { ReplaceableComponentsState } from '../states';
+import { AbpApplicationConfigurationService } from '../proxy/volo/abp/asp-net-core/mvc/application-configurations/abp-application-configuration.service';
+import { ReplaceableComponentsService, RoutesService } from '../services';
+import { mockRoutesService } from './routes.service.spec';
 
 @Component({
   selector: 'abp-layout-application',
@@ -78,45 +77,20 @@ const routes: ABP.Route[] = [
   },
 ];
 
-const storeData = {
-  ReplaceableComponentsState: {
-    replaceableComponents: [
-      {
-        key: 'Theme.ApplicationLayoutComponent',
-        component: DummyApplicationLayoutComponent,
-      },
-      {
-        key: 'Theme.AccountLayoutComponent',
-        component: DummyAccountLayoutComponent,
-      },
-      {
-        key: 'Theme.EmptyLayoutComponent',
-        component: DummyEmptyLayoutComponent,
-      },
-    ],
-  },
-};
-
 describe('DynamicLayoutComponent', () => {
-  const mockActions: Actions = NEVER;
-  const mockStore = ({
-    selectSnapshot() {
-      return true;
-    },
-  } as unknown) as Store;
-
   const createComponent = createRoutingFactory({
     component: RouterOutletComponent,
     stubsEnabled: false,
     declarations: [DummyComponent, DynamicLayoutComponent],
-    mocks: [ApplicationConfigurationService, HttpClient],
+    mocks: [AbpApplicationConfigurationService, HttpClient],
     providers: [
       {
         provide: RoutesService,
-        useFactory: () => new RoutesService(mockActions, mockStore),
+        useFactory: () => mockRoutesService(),
       },
+      ReplaceableComponentsService,
     ],
-    imports: [RouterModule, DummyLayoutModule, NgxsModule.forRoot([ReplaceableComponentsState])],
+    imports: [RouterModule, DummyLayoutModule],
     routes: [
       { path: '', component: RouterOutletComponent },
       {
@@ -163,15 +137,26 @@ describe('DynamicLayoutComponent', () => {
   });
 
   let spectator: SpectatorRouting<RouterOutletComponent>;
-  let store: Store;
+  let replaceableComponents: ReplaceableComponentsService;
 
   beforeEach(async () => {
     spectator = createComponent();
-    store = spectator.inject(Store);
+    replaceableComponents = spectator.inject(ReplaceableComponentsService);
     const routesService = spectator.inject(RoutesService);
     routesService.add(routes);
 
-    store.reset(storeData);
+    replaceableComponents.add({
+      key: 'Theme.ApplicationLayoutComponent',
+      component: DummyApplicationLayoutComponent,
+    });
+    replaceableComponents.add({
+      key: 'Theme.AccountLayoutComponent',
+      component: DummyAccountLayoutComponent,
+    });
+    replaceableComponents.add({
+      key: 'Theme.EmptyLayoutComponent',
+      component: DummyEmptyLayoutComponent,
+    });
   });
 
   it('should handle application layout from parent abp route and display it', async () => {
@@ -204,8 +189,8 @@ describe('DynamicLayoutComponent', () => {
   });
 
   it('should not display any layout when layouts are empty', async () => {
-    store.reset({ ...storeData, ReplaceableComponentsState: {} });
-
+    const spy = jest.spyOn(replaceableComponents, 'get');
+    spy.mockReturnValue(null);
     spectator.detectChanges();
 
     spectator.router.navigateByUrl('/withoutLayout');

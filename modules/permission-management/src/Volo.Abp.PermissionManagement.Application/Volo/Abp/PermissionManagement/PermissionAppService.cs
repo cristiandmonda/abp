@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization.Permissions;
@@ -116,7 +115,7 @@ namespace Volo.Abp.PermissionManagement
             var policyName = Options.ProviderPolicies.GetOrDefault(providerName);
             if (policyName.IsNullOrEmpty())
             {
-                throw new AbpException($"No policy defined to get/set permissions for the provider '{policyName}'. Use {nameof(PermissionManagementOptions)} to map the policy.");
+                throw new AbpException($"No policy defined to get/set permissions for the provider '{providerName}'. Use {nameof(PermissionManagementOptions)} to map the policy.");
             }
 
             await AuthorizationService.CheckAsync(policyName);

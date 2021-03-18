@@ -398,7 +398,7 @@ builder.Entity<AppRole>(b =>
 
 You've configured the custom property for your `DbContext` that is used by your application on the runtime. We also need to configure the `MigrationsDbContext`.
 
-Instead of directly changing the `MigrationsDbContext`, we should use the entity extension system of the ABP Framework. Find the `YourProjectNameEntityExtensions` class in the `.EntityFrameworkCore` project of your solution (`BookStoreEntityExtensions` for this example) and change it as shown below:
+Instead of directly changing the `MigrationsDbContext`, we **should** use the entity extension system of the ABP Framework. Find the `YourProjectNameEfCoreEntityExtensionMappings` class in the `.EntityFrameworkCore` project of your solution (`BookStoreEfCoreEntityExtensionMappings` for this example) and change it as shown below:
 
 ````csharp
 public static class MyProjectNameEntityExtensions
@@ -412,7 +412,10 @@ public static class MyProjectNameEntityExtensions
             ObjectExtensionManager.Instance
                 .MapEfCoreProperty<IdentityRole, string>(
                     "Title",
-                    builder => { builder.HasMaxLength(64); }
+                    (entityBuilder, propertyBuilder) =>
+                    {
+                        propertyBuilder.HasMaxLength(128);
+                    }
                 );
         });
     }
@@ -583,7 +586,7 @@ First step is to change the connection string section inside all the `appsetting
 
 ````json
 "ConnectionStrings": {
-  "Default": "Server=localhost;Database=BookStore;Trusted_Connection=True;MultipleActiveResultSets=true"
+  "Default": "Server=localhost;Database=BookStore;Trusted_Connection=True"
 }
 ````
 
@@ -591,10 +594,10 @@ Change it as shown below:
 
 ````json
 "ConnectionStrings": {
-  "Default": "Server=localhost;Database=BookStore;Trusted_Connection=True;MultipleActiveResultSets=true",
-  "AbpPermissionManagement": "Server=localhost;Database=BookStore_SecondDb;Trusted_Connection=True;MultipleActiveResultSets=true",
-  "AbpSettingManagement": "Server=localhost;Database=BookStore_SecondDb;Trusted_Connection=True;MultipleActiveResultSets=true",
-  "AbpAuditLogging": "Server=localhost;Database=BookStore_SecondDb;Trusted_Connection=True;MultipleActiveResultSets=true"
+  "Default": "Server=localhost;Database=BookStore;Trusted_Connection=True",
+  "AbpPermissionManagement": "Server=localhost;Database=BookStore_SecondDb;Trusted_Connection=True",
+  "AbpSettingManagement": "Server=localhost;Database=BookStore_SecondDb;Trusted_Connection=True",
+  "AbpAuditLogging": "Server=localhost;Database=BookStore_SecondDb;Trusted_Connection=True"
 }
 ````
 

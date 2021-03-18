@@ -39,6 +39,7 @@ namespace Volo.Abp.ObjectExtending
             );
         }
 
+        [Obsolete("Use MapEfCoreProperty with EntityTypeAndPropertyBuildAction parameters.")]
         public static ObjectExtensionManager MapEfCoreProperty<TEntity, TProperty>(
             [NotNull] this ObjectExtensionManager objectExtensionManager,
             [NotNull] string propertyName,
@@ -53,6 +54,7 @@ namespace Volo.Abp.ObjectExtending
             );
         }
 
+        [Obsolete("Use MapEfCoreProperty with EntityTypeAndPropertyBuildAction parameters.")]
         public static ObjectExtensionManager MapEfCoreProperty(
             [NotNull] this ObjectExtensionManager objectExtensionManager,
             [NotNull] Type entityType,
@@ -141,7 +143,9 @@ namespace Volo.Abp.ObjectExtending
                 var propertyBuilder = typeBuilder.Property(property.Type, property.Name);
 
                 efCoreMapping.EntityTypeAndPropertyBuildAction?.Invoke(typeBuilder, propertyBuilder);
+#pragma warning disable 618
                 efCoreMapping.PropertyBuildAction?.Invoke(propertyBuilder);
+#pragma warning restore 618
             }
         }
     }

@@ -1,0 +1,9 @@
+﻿@addTagHelper *, Volo.Abp.AspNetCore.Mvc.UI.Bootstrap
+
+@model Volo.CmsKit.Public.Web.Pages.CmsKit.Shared.Components.Pages.PageViewModel
+
+<abp-card>
+    <abp-card-body>
+        @Html.Raw(Model.Content)
+    </abp-card-body>
+</abp-card>

@@ -22,6 +22,8 @@ namespace Volo.Abp.Cli.ProjectModification
             {
                 case NuGetPackageTarget.Web:
                     return FindProjectEndsWith(projectFiles, assemblyNames, ".Web");
+                case NuGetPackageTarget.IdentityServer:
+                    return FindProjectEndsWith(projectFiles, assemblyNames, ".IdentityServer");
                 case NuGetPackageTarget.EntityFrameworkCore:
                     return FindProjectEndsWith(projectFiles, assemblyNames, ".EntityFrameworkCore");
                 case NuGetPackageTarget.MongoDB:
@@ -45,6 +47,8 @@ namespace Volo.Abp.Cli.ProjectModification
                     return FindProjectEndsWith(projectFiles, assemblyNames, ".SignalR") ??
                            FindProjectEndsWith(projectFiles, assemblyNames, ".Web") ??
                            FindProjectEndsWith(projectFiles, assemblyNames, ".HttpApi.Host");
+                case NuGetPackageTarget.Blazor:
+                    return FindProjectEndsWith(projectFiles, assemblyNames, ".Blazor");
                 default:
                     return null;
             }
@@ -103,8 +107,8 @@ namespace Volo.Abp.Cli.ProjectModification
 
         private static string FindProjectEndsWith(
             string[] projectFiles,
-            string[] assemblyNames, 
-            string postfix, 
+            string[] assemblyNames,
+            string postfix,
             string excludePostfix = null)
         {
             for (var i = 0; i < assemblyNames.Length; i++)

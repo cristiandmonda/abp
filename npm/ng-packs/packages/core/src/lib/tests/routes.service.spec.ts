@@ -1,8 +1,19 @@
-import { Store } from '@ngxs/store';
 import { Subject } from 'rxjs';
 import { take } from 'rxjs/operators';
-import { GetAppConfiguration } from '../actions';
 import { RoutesService } from '../services';
+import { DummyInjector, mockActions } from './utils/common.utils';
+import { mockPermissionService } from './utils/permission-service.spec.utils';
+
+const updateStream$ = new Subject();
+
+export const mockRoutesService = (injectorPayload = {} as { [key: string]: any }) => {
+  const injector = new DummyInjector({
+    PermissionService: mockPermissionService(),
+    ConfigStateService: { createOnUpdateStream: () => updateStream$ },
+    ...injectorPayload,
+  });
+  return new RoutesService(injector);
+};
 
 describe('Routes Service', () => {
   let service: RoutesService;
@@ -10,18 +21,12 @@ describe('Routes Service', () => {
     { path: '/foo', name: 'foo' },
     { path: '/foo/bar', name: 'bar', parentName: 'foo', invisible: true, order: 2 },
     { path: '/foo/bar/baz', name: 'baz', parentName: 'bar', order: 1 },
+    { path: '/foo/bar/baz/qux', name: 'qux', parentName: 'baz', order: 1 },
     { path: '/foo/x', name: 'x', parentName: 'foo', order: 1 },
   ];
 
-  const mockActions = new Subject();
-  const mockStore = ({
-    selectSnapshot() {
-      return true;
-    },
-  } as unknown) as Store;
-
   beforeEach(() => {
-    service = new RoutesService(mockActions, mockStore);
+    service = mockRoutesService();
   });
 
   describe('#add', () => {
@@ -32,11 +37,12 @@ describe('Routes Service', () => {
       const tree = await service.tree$.pipe(take(1)).toPromise();
       const visible = await service.visible$.pipe(take(1)).toPromise();
 
-      expect(flat.length).toBe(4);
-      expect(flat[3].name).toBe('foo');
+      expect(flat.length).toBe(5);
       expect(flat[0].name).toBe('baz');
-      expect(flat[1].name).toBe('x');
-      expect(flat[2].name).toBe('bar');
+      expect(flat[1].name).toBe('qux');
+      expect(flat[2].name).toBe('x');
+      expect(flat[3].name).toBe('bar');
+      expect(flat[4].name).toBe('foo');
 
       expect(tree.length).toBe(1);
       expect(tree[0].name).toBe('foo');
@@ -44,6 +50,7 @@ describe('Routes Service', () => {
       expect(tree[0].children[0].name).toBe('x');
       expect(tree[0].children[1].name).toBe('bar');
       expect(tree[0].children[1].children[0].name).toBe('baz');
+      expect(tree[0].children[1].children[0].children[0].name).toBe('qux');
 
       expect(visible.length).toBe(1);
       expect(visible[0].name).toBe('foo');
@@ -74,7 +81,8 @@ describe('Routes Service', () => {
 
       expect(service.hasChildren('foo')).toBe(true);
       expect(service.hasChildren('bar')).toBe(true);
-      expect(service.hasChildren('baz')).toBe(false);
+      expect(service.hasChildren('baz')).toBe(true);
+      expect(service.hasChildren('qux')).toBe(false);
     });
   });
 
@@ -123,11 +131,12 @@ describe('Routes Service', () => {
       const tree = service.tree;
       const visible = service.visible;
 
-      expect(flat.length).toBe(4);
-      expect(flat[3].name).toBe('foo');
+      expect(flat.length).toBe(5);
       expect(flat[0].name).toBe('baz');
-      expect(flat[1].name).toBe('x');
-      expect(flat[2].name).toBe('bar');
+      expect(flat[1].name).toBe('qux');
+      expect(flat[2].name).toBe('x');
+      expect(flat[3].name).toBe('bar');
+      expect(flat[4].name).toBe('foo');
 
       expect(tree.length).toBe(1);
       expect(tree[0].name).toBe('foo');
@@ -135,6 +144,7 @@ describe('Routes Service', () => {
       expect(tree[0].children[0].name).toBe('x');
       expect(tree[0].children[1].name).toBe('bar');
       expect(tree[0].children[1].children[0].name).toBe('baz');
+      expect(tree[0].children[1].children[0].children[0].name).toBe('qux');
 
       expect(visible.length).toBe(1);
       expect(visible[0].name).toBe('foo');
@@ -158,7 +168,7 @@ describe('Routes Service', () => {
 
     it('should be called upon successful GetAppConfiguration action', () => {
       const refresh = jest.spyOn(service, 'refresh');
-      mockActions.next({ action: new GetAppConfiguration(), status: 'SUCCESSFUL' });
+      updateStream$.next();
       expect(refresh).toHaveBeenCalledTimes(1);
     });
   });

@@ -6,7 +6,11 @@
 
 ## 通用(泛型)仓储
 
-ABP为每个聚合根或实体提供了  **默认的通用(泛型)仓储**  . 你可以在服务中[注入](Dependency-Injection.md) `IRepository<TEntity, TKey>` 使用标准的**CRUD**操作. 用法示例:
+ABP为每个聚合根或实体提供了  **默认的通用(泛型)仓储**  . 你可以在服务中[注入](Dependency-Injection.md) `IRepository<TEntity, TKey>` 使用标准的**CRUD**操作.
+
+> 数据库提供程序层应正确配置为能够使用默认的通用存储库. 如果你已经使用启动模板创建了项目,则这些配置 **已经完成**了. 如果不是,请参考数据库提供程序文档([EF Core](Entity-Framework-Core.md) / [MongoDB](MongoDB.md))进行配置.
+
+**默认通用仓储用法示例:**
 
 ````C#
 public class PersonAppService : ApplicationService
@@ -146,7 +150,7 @@ var people = _personRepository
 * 这里异步方法**不是标准LINQ方法**,它们定义在[Microsoft.EntityFrameworkCore](https://www.nuget.org/packages/Microsoft.EntityFrameworkCore)Nuget包中.
 * 标准模板应用层与领域层**不引用**EF Core 包以实现数据库提供程序独立.
 
-根据你的需求和开发模式,你可以根据以下选项使用异步方法.s
+根据你的需求和开发模式,你可以根据以下选项使用异步方法.
 
 > 强烈建议使用异步方法! 在执行数据库查询时不要使用同步LINQ方法,以便能够开发可伸缩的应用程序.
 

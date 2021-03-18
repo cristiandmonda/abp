@@ -8,11 +8,14 @@ program
     '-v, --nextVersion <version>',
     'next semantic version. Available versions: ["major", "minor", "patch", "premajor", "preminor", "prepatch", "prerelease", "or type a custom version"]',
   )
-  .option('-p, --preview', 'publish with preview tag');
+  .option('-r, --registry <registry>', 'target npm server registry')
+  .option('-p, --preview', 'publishes with preview tag')
+  .option('-r, --rc', 'publishes with next tag')
+  .option('-g, --skipGit', 'skips git push');
 
 program.parse(process.argv);
 
-const publish = async () => {
+(async () => {
   const versions = ['major', 'minor', 'patch', 'premajor', 'preminor', 'prepatch', 'prerelease'];
 
   if (!program.nextVersion) {
@@ -20,9 +23,7 @@ const publish = async () => {
     process.exit(1);
   }
 
-  const registry = program.preview
-    ? 'https://www.myget.org/F/abp-nightly/auth/8f2a5234-1bce-4dc7-b976-2983078590a9/npm/'
-    : 'https://registry.npmjs.org';
+  const registry = program.registry || 'https://registry.npmjs.org';
 
   try {
     await fse.remove('../dist');
@@ -51,18 +52,19 @@ const publish = async () => {
 
     if (program.preview) await replaceWithPreview(program.nextVersion);
 
-    await execa('yarn', ['build', '--noInstall'], { stdout: 'inherit' });
+    await execa('yarn', ['build', '--noInstall', '--skipNgcc'], { stdout: 'inherit' });
+
+    await execa('yarn', ['build:schematics'], { stdout: 'inherit' });
 
     await fse.rename('../lerna.publish.json', '../lerna.json');
 
+    let tag: string;
+    if (program.preview) tag = 'preview';
+    if (program.rc) tag = 'next';
+
     await execa(
       'yarn',
-      [
-        'lerna',
-        'exec',
-        '--',
-        `"npm publish --registry ${registry}${program.preview ? ' --tag preview' : ''}"`,
-      ],
+      ['lerna', 'exec', '--', `"npm publish --registry ${registry}${tag ? ` --tag ${tag}` : ''}"`],
       {
         stdout: 'inherit',
         cwd: '../',
@@ -71,7 +73,7 @@ const publish = async () => {
 
     await fse.rename('../lerna.json', '../lerna.publish.json');
 
-    if (!program.preview) {
+    if (!program.preview && !program.skipGit) {
       await execa('git', ['add', '../packages/*', '../package.json', '../lerna.version.json'], {
         stdout: 'inherit',
       });
@@ -85,8 +87,4 @@ const publish = async () => {
   }
 
   process.exit(0);
-};
-
-publish();
-
-export default publish;
+})();

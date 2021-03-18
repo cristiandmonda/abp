@@ -19,13 +19,13 @@ namespace Volo.CmsKit.Reactions
         [Fact]
         public async Task GetReactionsAsync()
         {
-            var reactions = await _reactionManager.GetReactionsAsync();
+            var reactions = await _reactionManager.GetReactionsAsync(_cmsKitTestData.EntityType1);
 
-            reactions.Count.ShouldBe(8);
+            reactions.Count.ShouldBe(12);
 
             var reactionsByEntityType = await _reactionManager.GetReactionsAsync(_cmsKitTestData.EntityType1);
 
-            reactionsByEntityType.Count.ShouldBe(8);
+            reactionsByEntityType.Count.ShouldBe(12);
         }
 
         [Fact]
@@ -44,7 +44,7 @@ namespace Volo.CmsKit.Reactions
         [Fact]
         public async Task CreateAsync()
         {
-            var reaction = await _reactionManager.CreateAsync(
+            var reaction = await _reactionManager.GetOrCreateAsync(
                 _cmsKitTestData.User2Id,
                 _cmsKitTestData.EntityType1,
                 _cmsKitTestData.EntityId2,
@@ -69,7 +69,7 @@ namespace Volo.CmsKit.Reactions
 
             UsingDbContext(context =>
             {
-                var reaction = context.UserReactions.FirstOrDefault(x =>
+                var reaction = context.Set<UserReaction>().FirstOrDefault(x =>
                     x.CreatorId == _cmsKitTestData.User1Id &&
                     x.ReactionName == StandardReactions.Confused &&
                     x.EntityId == _cmsKitTestData.EntityId1 &&

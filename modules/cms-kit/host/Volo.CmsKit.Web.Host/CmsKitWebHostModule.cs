@@ -65,6 +65,8 @@ namespace Volo.CmsKit
     {
         public override void PreConfigureServices(ServiceConfigurationContext context)
         {
+            FeatureConfigurer.Configure();
+
             context.Services.PreConfigure<AbpMvcDataAnnotationsLocalizationOptions>(options =>
             {
                 options.AddAssemblyResource(
@@ -220,9 +222,9 @@ namespace Volo.CmsKit
             }
 
             app.UseHttpsRedirection();
-            app.UseVirtualFiles();
+            app.UseStaticFiles();
             app.UseRouting();
-            app.UseAuthentication(); 
+            app.UseAuthentication();
 
             if (MultiTenancyConsts.IsEnabled)
             {

@@ -51,14 +51,17 @@ namespace Volo.Abp.Account.Web.Pages.Account
 
         protected IAuthenticationSchemeProvider SchemeProvider { get; }
         protected AbpAccountOptions AccountOptions { get; }
+        protected IOptions<IdentityOptions> IdentityOptions { get; }
 
         public bool ShowCancelButton { get; set; }
 
         public LoginModel(
             IAuthenticationSchemeProvider schemeProvider,
-            IOptions<AbpAccountOptions> accountOptions)
+            IOptions<AbpAccountOptions> accountOptions,
+            IOptions<IdentityOptions> identityOptions)
         {
             SchemeProvider = schemeProvider;
+            IdentityOptions = identityOptions;
             AccountOptions = accountOptions.Value;
         }
 
@@ -91,6 +94,8 @@ namespace Volo.Abp.Account.Web.Pages.Account
 
             await ReplaceEmailToUsernameOfInputIfNeeds();
 
+            await IdentityOptions.SetAsync();
+
             var result = await SignInManager.PasswordSignInAsync(
                 LoginInput.UserNameOrEmailAddress,
                 LoginInput.Password,
@@ -107,12 +112,7 @@ namespace Volo.Abp.Account.Web.Pages.Account
 
             if (result.RequiresTwoFactor)
             {
-                return RedirectToPage("./SendSecurityCode", new
-                {
-                    returnUrl = ReturnUrl,
-                    returnUrlHash = ReturnUrlHash,
-                    rememberMe = LoginInput.RememberMe
-                });
+                return await TwoFactorLoginResultAsync();
             }
 
             if (result.IsLockedOut)
@@ -140,6 +140,14 @@ namespace Volo.Abp.Account.Web.Pages.Account
             Debug.Assert(user != null, nameof(user) + " != null");
 
             return RedirectSafely(ReturnUrl, ReturnUrlHash);
+        }
+
+        /// <summary>
+        /// Override this method to add 2FA for your application.
+        /// </summary>
+        protected virtual Task<IActionResult> TwoFactorLoginResultAsync()
+        {
+            throw new NotImplementedException();
         }
 
         protected virtual async Task<List<ExternalProviderModel>> GetExternalProviders()
@@ -177,6 +185,8 @@ namespace Volo.Abp.Account.Web.Pages.Account
                 Logger.LogWarning($"External login callback error: {remoteError}");
                 return RedirectToPage("./Login");
             }
+
+            await IdentityOptions.SetAsync();
 
             var loginInfo = await SignInManager.GetExternalLoginInfoAsync();
             if (loginInfo == null)
@@ -251,6 +261,8 @@ namespace Volo.Abp.Account.Web.Pages.Account
 
         protected virtual async Task<IdentityUser> CreateExternalUserAsync(ExternalLoginInfo info)
         {
+            await IdentityOptions.SetAsync();
+
             var emailAddress = info.Principal.FindFirstValue(AbpClaimTypes.Email);
 
             var user = new IdentityUser(GuidGenerator.Create(), emailAddress, emailAddress, CurrentTenant.Id);

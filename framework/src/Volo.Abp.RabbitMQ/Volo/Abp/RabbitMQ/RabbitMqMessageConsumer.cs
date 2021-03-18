@@ -20,7 +20,7 @@ namespace Volo.Abp.RabbitMQ
 
         protected IExceptionNotifier ExceptionNotifier { get; }
 
-        protected AbpTimer Timer { get; }
+        protected AbpAsyncTimer Timer { get; }
 
         protected ExchangeDeclareConfiguration Exchange { get; private set; }
 
@@ -38,7 +38,7 @@ namespace Volo.Abp.RabbitMQ
 
         public RabbitMqMessageConsumer(
             IConnectionPool connectionPool,
-            AbpTimer timer, 
+            AbpAsyncTimer timer,
             IExceptionNotifier exceptionNotifier)
         {
             ConnectionPool = connectionPool;
@@ -50,7 +50,7 @@ namespace Volo.Abp.RabbitMQ
             Callbacks = new ConcurrentBag<Func<IModel, BasicDeliverEventArgs, Task>>();
 
             Timer.Period = 5000; //5 sec.
-            Timer.Elapsed += Timer_Elapsed;
+            Timer.Elapsed = Timer_Elapsed;
             Timer.RunOnStart = true;
         }
 
@@ -77,7 +77,7 @@ namespace Volo.Abp.RabbitMQ
             await TrySendQueueBindCommandsAsync();
         }
 
-        protected virtual void TrySendQueueBindCommands()
+        protected virtual async Task TrySendQueueBindCommandsAsync()
         {
             try
             {
@@ -90,43 +90,38 @@ namespace Volo.Abp.RabbitMQ
 
                     lock (ChannelSendSyncLock)
                     {
-                        QueueBindCommands.TryPeek(out var command);
-
-                        switch (command.Type)
+                        if (QueueBindCommands.TryPeek(out var command))
                         {
-                            case QueueBindType.Bind:
-                                Channel.QueueBind(
-                                    queue: Queue.QueueName,
-                                    exchange: Exchange.ExchangeName,
-                                    routingKey: command.RoutingKey
-                                );
-                                break;
-                            case QueueBindType.Unbind:
-                                Channel.QueueUnbind(
-                                    queue: Queue.QueueName,
-                                    exchange: Exchange.ExchangeName,
-                                    routingKey: command.RoutingKey
-                                );
-                                break;
-                            default:
-                                throw new AbpException($"Unknown {nameof(QueueBindType)}: {command.Type}");
-                        }
+                            switch (command.Type)
+                            {
+                                case QueueBindType.Bind:
+                                    Channel.QueueBind(
+                                        queue: Queue.QueueName,
+                                        exchange: Exchange.ExchangeName,
+                                        routingKey: command.RoutingKey
+                                    );
+                                    break;
+                                case QueueBindType.Unbind:
+                                    Channel.QueueUnbind(
+                                        queue: Queue.QueueName,
+                                        exchange: Exchange.ExchangeName,
+                                        routingKey: command.RoutingKey
+                                    );
+                                    break;
+                                default:
+                                    throw new AbpException($"Unknown {nameof(QueueBindType)}: {command.Type}");
+                            }
 
-                        QueueBindCommands.TryDequeue(out command);
+                            QueueBindCommands.TryDequeue(out command);
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
                 Logger.LogException(ex, LogLevel.Warning);
-                AsyncHelper.RunSync(() => ExceptionNotifier.NotifyAsync(ex, logLevel: LogLevel.Warning));
+                await ExceptionNotifier.NotifyAsync(ex, logLevel: LogLevel.Warning);
             }
-        }
-
-        protected virtual Task TrySendQueueBindCommandsAsync()
-        {
-            TrySendQueueBindCommands();
-            return Task.CompletedTask;
         }
 
         public virtual void OnMessageReceived(Func<IModel, BasicDeliverEventArgs, Task> callback)
@@ -134,26 +129,25 @@ namespace Volo.Abp.RabbitMQ
             Callbacks.Add(callback);
         }
 
-        protected virtual void Timer_Elapsed(object sender, EventArgs e)
+        protected virtual async Task Timer_Elapsed(AbpAsyncTimer timer)
         {
             if (Channel == null || Channel.IsOpen == false)
             {
-                TryCreateChannel();
-                TrySendQueueBindCommands();
+                await TryCreateChannelAsync();
+                await TrySendQueueBindCommandsAsync();
             }
         }
 
-        protected virtual void TryCreateChannel()
+        protected virtual async Task TryCreateChannelAsync()
         {
-            DisposeChannel();
+            await DisposeChannelAsync();
 
             try
             {
-                var channel = ConnectionPool
+                Channel = ConnectionPool
                     .Get(ConnectionName)
                     .CreateModel();
-
-                channel.ExchangeDeclare(
+                Channel.ExchangeDeclare(
                     exchange: Exchange.ExchangeName,
                     type: Exchange.Type,
                     durable: Exchange.Durable,
@@ -161,7 +155,7 @@ namespace Volo.Abp.RabbitMQ
                     arguments: Exchange.Arguments
                 );
 
-                channel.QueueDeclare(
+                Channel.QueueDeclare(
                     queue: Queue.QueueName,
                     durable: Queue.Durable,
                     exclusive: Queue.Exclusive,
@@ -169,42 +163,65 @@ namespace Volo.Abp.RabbitMQ
                     arguments: Queue.Arguments
                 );
 
-                var consumer = new EventingBasicConsumer(channel);
-                consumer.Received += async (model, basicDeliverEventArgs) =>
-                {
-                    await HandleIncomingMessage(channel, basicDeliverEventArgs);
-                };
+                var consumer = new AsyncEventingBasicConsumer(Channel);
+                consumer.Received += HandleIncomingMessageAsync;
 
-                channel.BasicConsume(
+                Channel.BasicConsume(
                     queue: Queue.QueueName,
                     autoAck: false,
                     consumer: consumer
                 );
-
-                Channel = channel;
             }
             catch (Exception ex)
             {
                 Logger.LogException(ex, LogLevel.Warning);
-                AsyncHelper.RunSync(() => ExceptionNotifier.NotifyAsync(ex, logLevel: LogLevel.Warning));
+                await ExceptionNotifier.NotifyAsync(ex, logLevel: LogLevel.Warning);
             }
         }
 
-        protected virtual async Task HandleIncomingMessage(IModel channel, BasicDeliverEventArgs basicDeliverEventArgs)
+        protected virtual async Task HandleIncomingMessageAsync(object sender, BasicDeliverEventArgs basicDeliverEventArgs)
         {
             try
             {
                 foreach (var callback in Callbacks)
                 {
-                    await callback(channel, basicDeliverEventArgs);
+                    await callback(Channel, basicDeliverEventArgs);
                 }
 
-                channel.BasicAck(basicDeliverEventArgs.DeliveryTag, multiple: false);
+                Channel.BasicAck(basicDeliverEventArgs.DeliveryTag, multiple: false);
             }
             catch (Exception ex)
             {
+                try
+                {
+                    Channel.BasicNack(
+                        basicDeliverEventArgs.DeliveryTag,
+                        multiple: false,
+                        requeue: true
+                    );
+                }
+                catch { }
+                
                 Logger.LogException(ex);
                 await ExceptionNotifier.NotifyAsync(ex);
+            }
+        }
+
+        protected virtual async Task DisposeChannelAsync()
+        {
+            if (Channel == null)
+            {
+                return;
+            }
+
+            try
+            {
+                Channel.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException(ex, LogLevel.Warning);
+                await ExceptionNotifier.NotifyAsync(ex, logLevel: LogLevel.Warning);
             }
         }
 

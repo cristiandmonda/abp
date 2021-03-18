@@ -21,7 +21,7 @@ namespace Volo.Abp.Application.Services
     }
 
     public abstract class CrudAppService<TEntity, TEntityDto, TKey, TGetListInput>
-        : CrudAppService<TEntity, TEntityDto, TKey, TGetListInput, TEntityDto, TEntityDto>
+        : CrudAppService<TEntity, TEntityDto, TKey, TGetListInput, TEntityDto>
         where TEntity : class, IEntity<TKey>
         where TEntityDto : IEntityDto<TKey>
     {
@@ -57,7 +57,7 @@ namespace Volo.Abp.Application.Services
 
         protected override Task<TEntityDto> MapToGetListOutputDtoAsync(TEntity entity)
         {
-            return base.MapToGetOutputDtoAsync(entity);
+            return MapToGetOutputDtoAsync(entity);
         }
 
         protected override TEntityDto MapToGetListOutputDto(TEntity entity)

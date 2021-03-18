@@ -8,21 +8,21 @@ param(
 
 npm install
 
-$NextVersion = $(node get-version.js)
-$rootFolder = (Get-Item -Path "./" -Verbose).FullName
+$NextVersion = $(node publish-utils.js --nextVersion)
+$RootFolder = (Get-Item -Path "./" -Verbose).FullName
 
 if(-Not $Version) {
 $Version = $NextVersion;
 }
 
 if(-Not $Registry) {
-$Registry = "https://www.myget.org/F/abp-nightly/auth/8f2a5234-1bce-4dc7-b976-2983078590a9/npm/";
+exit
 }
 
 $commands = (
   "cd ng-packs\scripts",
   "npm install",
-  "npm run publish-packages -- --nextVersion $Version --preview",
+  "npm run publish-packages -- --nextVersion $Version --preview --registry $Registry",
   "cd ../../",
   "npm run lerna -- version $Version --yes --no-commit-hooks --skip-git --force-publish",
   "npm run replace-with-tilde",
@@ -34,7 +34,7 @@ foreach ($command in $commands) {
   Invoke-Expression $command
   if($LASTEXITCODE -ne '0' -And $command -notlike '*cd *'){
     Write-Host ("Process failed! " + $command)
-    Set-Location $rootFolder
+    Set-Location $RootFolder
     exit $LASTEXITCODE
   }
 }

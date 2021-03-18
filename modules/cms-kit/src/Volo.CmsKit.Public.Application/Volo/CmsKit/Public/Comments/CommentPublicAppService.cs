@@ -8,7 +8,8 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization;
-using Volo.Abp.MultiTenancy;
+using Volo.Abp.EventBus.Distributed;
+using Volo.Abp.Uow;
 using Volo.Abp.Users;
 using Volo.CmsKit.Comments;
 using Volo.CmsKit.Users;
@@ -17,50 +18,60 @@ namespace Volo.CmsKit.Public.Comments
 {
     public class CommentPublicAppService : ApplicationService, ICommentPublicAppService
     {
-        protected CmsKitOptions CmsKitOptions { get; }
         protected ICommentRepository CommentRepository { get; }
         protected ICmsUserLookupService CmsUserLookupService { get; }
+        public IDistributedEventBus DistributedEventBus { get; }
+        protected CommentManager CommentManager { get; }
 
         public CommentPublicAppService(
             ICommentRepository commentRepository,
             ICmsUserLookupService cmsUserLookupService,
-            IOptions<CmsKitOptions> cmsKitOptions)
+            IDistributedEventBus distributedEventBus,
+            CommentManager commentManager)
         {
-            CmsKitOptions = cmsKitOptions.Value;
             CommentRepository = commentRepository;
             CmsUserLookupService = cmsUserLookupService;
+            DistributedEventBus = distributedEventBus;
+            CommentManager = commentManager;
         }
 
-        public virtual async Task<ListResultDto<CommentWithDetailsDto>> GetAllForEntityAsync(string entityType, string entityId)
+        public virtual async Task<ListResultDto<CommentWithDetailsDto>> GetListAsync(string entityType, string entityId)
         {
-            CheckAuthorizationAsync(entityType);
-
-            var commentsWithAuthor = await CommentRepository.GetListWithAuthorsAsync(entityType, entityId);
+            var commentsWithAuthor = await CommentRepository
+                .GetListWithAuthorsAsync(entityType, entityId);
 
             return new ListResultDto<CommentWithDetailsDto>(
                 ConvertCommentsToNestedStructure(commentsWithAuthor)
-                );
+            );
         }
 
         [Authorize]
-        public virtual async Task<CommentDto> CreateAsync(CreateCommentInput input)
+        public virtual async Task<CommentDto> CreateAsync(string entityType, string entityId, CreateCommentInput input)
         {
-            var user = await CmsUserLookupService.FindByIdAsync(CurrentUser.GetId());
+            var user = await CmsUserLookupService.GetByIdAsync(CurrentUser.GetId());
 
-            if (user == null)
+            if(input.RepliedCommentId.HasValue)
             {
-                throw new BusinessException(message: "User Not found!");
+                await CommentRepository.GetAsync(input.RepliedCommentId.Value);
             }
 
-            var comment = await CommentRepository.InsertAsync(new Comment(
-                GuidGenerator.Create(),
-                input.EntityType,
-                input.EntityId,
-                input.Text,
-                input.RepliedCommentId,
-                user.Id,
-                CurrentTenant.Id
-            ));
+            var comment = await CommentRepository.InsertAsync(
+                await CommentManager.CreateAsync(
+                    user,
+                    entityType,
+                    entityId,
+                    input.Text,
+                    input.RepliedCommentId
+                )
+            );
+
+
+            await UnitOfWorkManager.Current.SaveChangesAsync();
+
+            await DistributedEventBus.PublishAsync(new CreatedCommentEvent
+            {
+                Id = comment.Id
+            });
 
             return ObjectMapper.Map<Comment, CommentDto>(comment);
         }
@@ -72,7 +83,7 @@ namespace Volo.CmsKit.Public.Comments
 
             if (comment.CreatorId != CurrentUser.GetId())
             {
-                throw new BusinessException();
+                throw new AbpAuthorizationException();
             }
 
             comment.SetText(input.Text);
@@ -89,14 +100,16 @@ namespace Volo.CmsKit.Public.Comments
 
             if (comment.CreatorId != CurrentUser.GetId())
             {
-                throw new BusinessException();
+                throw new AbpAuthorizationException();
             }
 
-            await CommentRepository.DeleteAsync(id);
+            await CommentRepository.DeleteWithRepliesAsync(comment);
         }
 
-        private List<CommentWithDetailsDto> ConvertCommentsToNestedStructure(List<CommentWithAuthor> comments)
+        private List<CommentWithDetailsDto> ConvertCommentsToNestedStructure(List<CommentWithAuthorQueryResultItem> comments)
         {
+            //TODO: I think this method can be optimized if you use dictionaries instead of straight search
+
             var parentComments = comments
                 .Where(c=> c.Comment.RepliedCommentId == null)
                 .Select(c=> ObjectMapper.Map<Comment, CommentWithDetailsDto>(c.Comment))
@@ -120,25 +133,7 @@ namespace Volo.CmsKit.Public.Comments
             return parentComments;
         }
 
-        private async Task CheckAuthorizationAsync(string entityType)
-        {
-            if (await IsPublicEntity(entityType))
-            {
-                return;
-            }
-
-            if (!CurrentUser.IsAuthenticated)
-            {
-                throw new AbpAuthorizationException(L["CommentAuthorizationExceptionMessage"]);
-            }
-        }
-
-        private async Task<bool> IsPublicEntity(string entityType)
-        {
-            return CmsKitOptions.PublicCommentEntities.Contains(entityType);
-        }
-
-        private CmsUserDto GetAuthorAsDtoFromCommentList(List<CommentWithAuthor> comments, Guid commentId)
+        private CmsUserDto GetAuthorAsDtoFromCommentList(List<CommentWithAuthorQueryResultItem> comments, Guid commentId)
         {
             return ObjectMapper.Map<CmsUser, CmsUserDto>(comments.Single(c => c.Comment.Id == commentId).Author);
         }

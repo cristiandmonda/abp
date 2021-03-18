@@ -11,11 +11,6 @@
     var _featuresModal = new abp.ModalManager(
         abp.appPath + 'FeatureManagement/FeatureManagementModal'
     );
-    var _connectionStringsModal = new abp.ModalManager({
-        viewUrl:
-            abp.appPath + 'TenantManagement/Tenants/ConnectionStringsModal',
-        modalClass: 'TenantConnectionStringManagement',
-    });
 
     var _dataTable = null;
 
@@ -30,17 +25,6 @@
                         ),
                         action: function (data) {
                             _editModal.open({
-                                id: data.record.id,
-                            });
-                        },
-                    },
-                    {
-                        text: l('ConnectionStrings'),
-                        visible: abp.auth.isGranted(
-                            'AbpTenantManagement.Tenants.ManageConnectionStrings'
-                        ),
-                        action: function (data) {
-                            _connectionStringsModal.open({
                                 id: data.record.id,
                             });
                         },
@@ -100,7 +84,7 @@
         },
         0 //adds as the first contributor
     );
-    
+
     $(function () {
         var _$wrapper = $('#TenantsWrapper');
 
@@ -127,6 +111,13 @@
         _$wrapper.find('button[name=CreateTenant]').click(function (e) {
             e.preventDefault();
             _createModal.open();
+        });
+
+        _$wrapper.find('button[name=ManageHostFeatures]').click(function (e) {
+            e.preventDefault();
+            _featuresModal.open({
+                providerName: 'T'
+            });
         });
     });
 })();

@@ -9,6 +9,9 @@ import {
 } from '@angular/core';
 import { NzFormatEmitEvent, NzFormatBeforeDropEvent } from 'ng-zorro-antd/tree';
 import { of } from 'rxjs';
+import { TreeNodeTemplateDirective } from '../templates/tree-node-template.directive';
+import { ExpandedIconTemplateDirective } from '../templates/expanded-icon-template.directive';
+import { NgbDropdown } from '@ng-bootstrap/ng-bootstrap';
 
 export type DropEvent = NzFormatEmitEvent & { pos: number };
 
@@ -24,11 +27,16 @@ export type DropEvent = NzFormatEmitEvent & { pos: number };
 export class TreeComponent {
   dropPosition: number;
 
+  dropdowns = {} as { [key: string]: NgbDropdown };
+
   @ContentChild('menu') menu: TemplateRef<any>;
+  @ContentChild(TreeNodeTemplateDirective) customNodeTemplate: TreeNodeTemplateDirective;
+  @ContentChild(ExpandedIconTemplateDirective) expandedIconTemplate: ExpandedIconTemplateDirective;
   @Output() readonly checkedKeysChange = new EventEmitter();
   @Output() readonly expandedKeysChange = new EventEmitter<string[]>();
   @Output() readonly selectedNodeChange = new EventEmitter();
   @Output() readonly dropOver = new EventEmitter<DropEvent>();
+  @Input() noAnimation = true;
   @Input() draggable: boolean;
   @Input() checkable: boolean;
   @Input() checkStrictly: boolean;
@@ -63,5 +71,9 @@ export class TreeComponent {
     event.pos = this.dropPosition;
 
     this.dropOver.emit(event);
+  }
+
+  initDropdown(key: string, dropdown: NgbDropdown) {
+    this.dropdowns[key] = dropdown;
   }
 }

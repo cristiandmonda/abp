@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Options;
 using Quartz;
 using Quartz.Impl;
-using Quartz.Spi;
+using Quartz.Impl.AdoJobStore.Common;
 using Volo.Abp.Modularity;
 using Volo.Abp.Threading;
 
@@ -15,8 +15,45 @@ namespace Volo.Abp.Quartz
         public override void ConfigureServices(ServiceConfigurationContext context)
         {
             var options = context.Services.ExecutePreConfiguredActions<AbpQuartzOptions>();
-            context.Services.AddSingleton(AsyncHelper.RunSync(() => new StdSchedulerFactory(options.Properties).GetScheduler()));
-            context.Services.AddSingleton(typeof(IJobFactory), typeof(AbpQuartzJobFactory));
+
+            context.Services.AddQuartz(options.Properties, build =>
+            {
+                // these are the defaults
+                if (options.Properties[StdSchedulerFactory.PropertySchedulerJobFactoryType] == null)
+                {
+                    build.UseMicrosoftDependencyInjectionScopedJobFactory();
+                }
+
+                if (options.Properties[StdSchedulerFactory.PropertySchedulerTypeLoadHelperType] == null)
+                {
+                    build.UseSimpleTypeLoader();
+                }
+
+                if (options.Properties[StdSchedulerFactory.PropertyJobStoreType] == null)
+                {
+                    build.UseInMemoryStore();
+                }
+
+                if (options.Properties[StdSchedulerFactory.PropertyThreadPoolType] == null)
+                {
+                    build.UseDefaultThreadPool(tp =>
+                    {
+                        tp.MaxConcurrency = 10;
+                    });
+                }
+
+                if (options.Properties["quartz.plugin.timeZoneConverter.type"] == null)
+                {
+                    build.UseTimeZoneConverter();
+                }
+
+                options.Configurator?.Invoke(build);
+            });
+
+            context.Services.AddSingleton(serviceProvider =>
+            {
+                return AsyncHelper.RunSync(() => serviceProvider.GetRequiredService<ISchedulerFactory>().GetScheduler());
+            });
 
             Configure<AbpQuartzOptions>(quartzOptions =>
             {
@@ -29,8 +66,7 @@ namespace Volo.Abp.Quartz
         {
             var options = context.ServiceProvider.GetRequiredService<IOptions<AbpQuartzOptions>>().Value;
 
-            _scheduler = context.ServiceProvider.GetService<IScheduler>();
-            _scheduler.JobFactory = context.ServiceProvider.GetService<IJobFactory>();
+            _scheduler = context.ServiceProvider.GetRequiredService<IScheduler>();
 
             AsyncHelper.RunSync(() => options.StartSchedulerFactory.Invoke(_scheduler));
         }

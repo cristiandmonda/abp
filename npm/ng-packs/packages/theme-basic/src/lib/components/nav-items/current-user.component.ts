@@ -1,7 +1,5 @@
-import { ApplicationConfiguration, AuthService, ConfigState } from '@abp/ng.core';
-import { Component, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
-import { Select } from '@ngxs/store';
+import { AuthService, ConfigStateService, CurrentUserDto } from '@abp/ng.core';
+import { Component } from '@angular/core';
 import { Observable } from 'rxjs';
 
 @Component({
@@ -9,7 +7,7 @@ import { Observable } from 'rxjs';
   // tslint:disable-next-line: component-max-inline-declarations
   template: `
     <ng-template #loginBtn>
-      <a role="button" class="nav-link" routerLink="/account/login">{{
+      <a role="button" class="nav-link pointer" (click)="navigateToLogin()">{{
         'AbpAccount::Login' | abpLocalization
       }}</a>
     </ng-template>
@@ -47,21 +45,20 @@ import { Observable } from 'rxjs';
     </div>
   `,
 })
-export class CurrentUserComponent implements OnInit {
-  @Select(ConfigState.getOne('currentUser'))
-  currentUser$: Observable<ApplicationConfiguration.CurrentUser>;
+export class CurrentUserComponent {
+  currentUser$: Observable<CurrentUserDto> = this.configState.getOne$('currentUser');
 
   get smallScreen(): boolean {
     return window.innerWidth < 992;
   }
 
-  constructor(private authService: AuthService, private router: Router) {}
+  constructor(private authService: AuthService, private configState: ConfigStateService) {}
 
-  ngOnInit() {}
+  navigateToLogin() {
+    this.authService.navigateToLogin();
+  }
 
   logout() {
-    this.authService.logout().subscribe(() => {
-      this.router.navigate(['/'], { state: { redirectUrl: this.router.url } });
-    });
+    this.authService.logout().subscribe();
   }
 }
